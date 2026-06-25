@@ -1,16 +1,5 @@
--- Copyright 2024 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright © 2025 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
 
 local test = require "integration_test"
 local capabilities = require "st.capabilities"
@@ -18,15 +7,15 @@ local t_utils = require "integration_test.utils"
 local SinglePrecisionFloat = require "st.matter.data_types.SinglePrecisionFloat"
 
 local clusters = require "st.matter.clusters"
-clusters.SmokeCoAlarm = require "SmokeCoAlarm"
 local version = require "version"
 if version.api < 10 then
-  clusters.SmokeCoAlarm = require "SmokeCoAlarm"
-  clusters.CarbonMonoxideConcentrationMeasurement = require "CarbonMonoxideConcentrationMeasurement"
+  clusters.SmokeCoAlarm = require "embedded_clusters.SmokeCoAlarm"
+  clusters.CarbonMonoxideConcentrationMeasurement = require "embedded_clusters.CarbonMonoxideConcentrationMeasurement"
 end
 
 local mock_device = test.mock_device.build_test_matter_device({
   profile = t_utils.get_profile_definition("smoke-co-temp-humidity-comeas.yml"),
+  _provisioning_state = "TYPED", -- we want this to have doConfigure on startup
   manufacturer_info = {
     vendor_id = 0x0000,
     product_id = 0x0000,
@@ -73,6 +62,10 @@ local cluster_subscribe_list = {
 }
 
 local function test_init()
+  -- The startup messages are enabled, so this device will get an init,
+  -- and doConfigure (because provisioning_state is TYPED on the device).
+  test.mock_device.add_test_device(mock_device)
+
   local subscribe_request = cluster_subscribe_list[1]:subscribe(mock_device)
   for i, cluster in ipairs(cluster_subscribe_list) do
     if i > 1 then
@@ -80,8 +73,9 @@ local function test_init()
     end
   end
   test.socket.matter:__expect_send({mock_device.id, subscribe_request})
-  test.mock_device.add_test_device(mock_device)
-  mock_device:expect_metadata_update({ profile = "smoke-co-temp-humidity-comeas" })
+  local read_attribute_list = clusters.PowerSource.attributes.AttributeList:read()
+  test.socket.matter:__expect_send({mock_device.id, read_attribute_list})
+  mock_device:expect_metadata_update({ provisioning_state = "PROVISIONED" })
 end
 
 test.set_test_init_function(test_init)
@@ -128,6 +122,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.smokeDetector.smoke.detected())
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -173,11 +170,14 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.carbonMonoxideDetector.carbonMonoxide.detected())
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
 test.register_message_test(
-  "Test battery alert handler",
+  "Test hardwareFault handler with BatteryAlert and No PowerSource BatChargeLevel messages",
   {
     {
       channel = "matter",
@@ -190,7 +190,7 @@ test.register_message_test(
     {
       channel = "capability",
       direction = "send",
-      message = mock_device:generate_test_message("main", capabilities.batteryLevel.battery.normal())
+      message = mock_device:generate_test_message("main", capabilities.hardwareFault.hardwareFault.clear())
     },
     {
       channel = "matter",
@@ -203,7 +203,7 @@ test.register_message_test(
     {
       channel = "capability",
       direction = "send",
-      message = mock_device:generate_test_message("main", capabilities.batteryLevel.battery.warning())
+      message = mock_device:generate_test_message("main", capabilities.hardwareFault.hardwareFault.clear())
     },
     {
       channel = "matter",
@@ -216,8 +216,181 @@ test.register_message_test(
     {
       channel = "capability",
       direction = "send",
-      message = mock_device:generate_test_message("main", capabilities.batteryLevel.battery.critical())
+      message = mock_device:generate_test_message("main", capabilities.hardwareFault.hardwareFault.clear())
     },
+  },
+  {
+     min_api_version = 17
+  }
+)
+
+test.register_message_test(
+  "Test hardwareFault handler with BatteryAlert and OK PowerSource BatChargeLevel state",
+  {
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.PowerSource.attributes.BatChargeLevel:build_test_report_data(mock_device, 1, clusters.PowerSource.attributes.BatChargeLevel.OK),
+      },
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.batteryLevel.battery.normal()),
+    },
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.SmokeCoAlarm.attributes.BatteryAlert:build_test_report_data(mock_device, 1, clusters.SmokeCoAlarm.attributes.BatteryAlert.NORMAL)
+      }
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.hardwareFault.hardwareFault.clear())
+    },
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.SmokeCoAlarm.attributes.BatteryAlert:build_test_report_data(mock_device, 1, clusters.SmokeCoAlarm.attributes.BatteryAlert.WARNING)
+      }
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.hardwareFault.hardwareFault.detected())
+    },
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.SmokeCoAlarm.attributes.BatteryAlert:build_test_report_data(mock_device, 1, clusters.SmokeCoAlarm.attributes.BatteryAlert.CRITICAL)
+      }
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.hardwareFault.hardwareFault.detected())
+    },
+  },
+  {
+     min_api_version = 17
+  }
+)
+
+test.register_message_test(
+  "Test hardwareFault handler with BatteryAlert and Warning PowerSource BatChargeLevel state",
+  {
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.PowerSource.attributes.BatChargeLevel:build_test_report_data(mock_device, 1, clusters.PowerSource.attributes.BatChargeLevel.WARNING),
+      },
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.batteryLevel.battery.warning()),
+    },
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.SmokeCoAlarm.attributes.BatteryAlert:build_test_report_data(mock_device, 1, clusters.SmokeCoAlarm.attributes.BatteryAlert.NORMAL)
+      }
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.hardwareFault.hardwareFault.clear())
+    },
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.SmokeCoAlarm.attributes.BatteryAlert:build_test_report_data(mock_device, 1, clusters.SmokeCoAlarm.attributes.BatteryAlert.WARNING)
+      }
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.hardwareFault.hardwareFault.clear())
+    },
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.SmokeCoAlarm.attributes.BatteryAlert:build_test_report_data(mock_device, 1, clusters.SmokeCoAlarm.attributes.BatteryAlert.CRITICAL)
+      }
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.hardwareFault.hardwareFault.detected())
+    },
+  },
+  {
+     min_api_version = 17
+  }
+)
+
+test.register_message_test(
+  "Test batteryLevel handler with PowerSource BatChargeLevel state",
+  {
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.PowerSource.attributes.BatChargeLevel:build_test_report_data(mock_device, 1, clusters.PowerSource.attributes.BatChargeLevel.OK),
+      },
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.batteryLevel.battery.normal()),
+    },
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.PowerSource.attributes.BatChargeLevel:build_test_report_data(mock_device, 1, clusters.PowerSource.attributes.BatChargeLevel.WARNING),
+      },
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.batteryLevel.battery.warning()),
+    },
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.PowerSource.attributes.BatChargeLevel:build_test_report_data(mock_device, 1, clusters.PowerSource.attributes.BatChargeLevel.CRITICAL),
+      },
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main", capabilities.batteryLevel.battery.critical()),
+    }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -260,6 +433,9 @@ test.register_message_test(
       direction = "send",
       message = {mock_device.id, clusters.SmokeCoAlarm.attributes.COState:read(mock_device)}
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -292,6 +468,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.hardwareFault.hardwareFault.clear())
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -311,6 +490,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.temperatureMeasurement.temperature({ value = 40.0, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -343,6 +525,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.relativeHumidityMeasurement.humidity({ value = 41 }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -391,6 +576,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.carbonMonoxideMeasurement.carbonMonoxideLevel({value = 10, unit = "ppm"}))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 

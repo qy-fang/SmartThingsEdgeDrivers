@@ -1,16 +1,6 @@
--- Copyright 2022 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright 2022 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
+
 
 local capabilities = require "st.capabilities"
 local ZigbeeDriver = require "st.zigbee"
@@ -18,6 +8,7 @@ local defaults = require "st.zigbee.defaults"
 local constants = require "st.zigbee.constants"
 local IASZone = (require "st.zigbee.zcl.clusters").IASZone
 local TemperatureMeasurement = (require "st.zigbee.zcl.clusters").TemperatureMeasurement
+local button_utils = require "button_utils"
 
 local temperature_measurement_defaults = {
   MIN_TEMP = "MIN_TEMP",
@@ -109,16 +100,19 @@ end
 local function added_handler(self, device)
   device:emit_event(capabilities.button.supportedButtonValues({"pushed","held","double"}, {visibility = { displayed = false }}))
   device:emit_event(capabilities.button.numberOfButtons({value = 1}, {visibility = { displayed = false }}))
-  device:emit_event(capabilities.button.button.pushed({state_change = false}))
-  device:send(TemperatureMeasurement.attributes.MaxMeasuredValue:read(device))
-  device:send(TemperatureMeasurement.attributes.MinMeasuredValue:read(device))
+  button_utils.emit_event_if_latest_state_missing(device, "main", capabilities.button, capabilities.button.button.NAME, capabilities.button.button.pushed({state_change = false}))
+  if device:supports_server_cluster(TemperatureMeasurement.ID) then
+    device:send(TemperatureMeasurement.attributes.MaxMeasuredValue:read(device))
+    device:send(TemperatureMeasurement.attributes.MinMeasuredValue:read(device))
+  end
 end
 
 local zigbee_button_driver_template = {
   supported_capabilities = {
     capabilities.button,
     capabilities.battery,
-    capabilities.temperatureMeasurement
+    capabilities.panicAlarm,
+    capabilities.temperatureMeasurement,
   },
   zigbee_handlers = {
     attr = {
@@ -136,21 +130,13 @@ local zigbee_button_driver_template = {
       }
     }
   },
-  sub_drivers = {
-    require("aqara"),
-    require("pushButton"),
-    require("frient"),
-    require("zigbee-multi-button"),
-    require("dimming-remote"),
-    require("iris"),
-    require("samjin"),
-    require("ewelink"),
-    require("thirdreality")
-  },
+  sub_drivers = require("sub_drivers"),
   lifecycle_handlers = {
     added = added_handler,
   },
-  ias_zone_configuration_method = constants.IAS_ZONE_CONFIGURE_TYPE.AUTO_ENROLL_RESPONSE
+  ias_zone_configuration_method = constants.IAS_ZONE_CONFIGURE_TYPE.AUTO_ENROLL_RESPONSE,
+  health_check = false,
+  shared_device_thread_enabled = true,
 }
 
 defaults.register_for_default_handlers(zigbee_button_driver_template, zigbee_button_driver_template.supported_capabilities)

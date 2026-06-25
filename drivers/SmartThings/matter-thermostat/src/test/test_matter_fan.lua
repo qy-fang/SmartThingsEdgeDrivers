@@ -1,16 +1,6 @@
--- Copyright 2024 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright © 2025 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
+
 local test = require "integration_test"
 local t_utils = require "integration_test.utils"
 
@@ -74,6 +64,7 @@ local mock_device_generic = test.mock_device.build_test_matter_device({
 
 local cluster_subscribe_list = {
     clusters.FanControl.attributes.FanMode,
+    clusters.FanControl.attributes.FanModeSequence,
     clusters.FanControl.attributes.PercentCurrent,
     clusters.FanControl.attributes.WindSupport,
     clusters.FanControl.attributes.WindSetting,
@@ -83,6 +74,7 @@ local cluster_subscribe_list = {
 
 local cluster_subscribe_list_generic = {
     clusters.FanControl.attributes.FanMode,
+    clusters.FanControl.attributes.FanModeSequence,
     clusters.FanControl.attributes.PercentCurrent,
 }
 
@@ -112,21 +104,32 @@ end
 test.register_coroutine_test(
   "Test profile change on fan with rock and wind",
   function()
+    mock_device:set_field("__BATTERY_SUPPORT", "NO_BATTERY") -- since we're assuming this would have happened during device_added in this case.
+    mock_device:set_field("__THERMOSTAT_RUNNING_STATE_SUPPORT", false) -- since we're assuming this would have happened during device_added in this case.
+
     test.socket.device_lifecycle:__queue_receive({ mock_device.id, "doConfigure" })
     mock_device:expect_metadata_update({ profile = "fan-rock-wind" })
     mock_device:expect_metadata_update({ provisioning_state = "PROVISIONED" })
   end,
-  { test_init = test_init }
+  {
+    test_init = test_init,
+    min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
   "Test profile change on fan with no features",
   function()
+    mock_device_generic:set_field("__BATTERY_SUPPORT", "NO_BATTERY") -- since we're assuming this would have happened during device_added in this case.
+    mock_device_generic:set_field("__THERMOSTAT_RUNNING_STATE_SUPPORT", false) -- since we're assuming this would have happened during device_added in this case.
     test.socket.device_lifecycle:__queue_receive({ mock_device_generic.id, "doConfigure" })
     mock_device_generic:expect_metadata_update({ profile = "fan-generic" })
     mock_device_generic:expect_metadata_update({ provisioning_state = "PROVISIONED" })
   end,
-  { test_init = test_init_generic }
+  {
+    test_init = test_init_generic,
+    min_api_version = 17
+  }
 )
 
 test.run_registered_tests()

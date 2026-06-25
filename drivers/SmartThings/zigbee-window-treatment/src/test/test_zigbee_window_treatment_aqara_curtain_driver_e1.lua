@@ -1,16 +1,6 @@
--- Copyright 2024 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright 2024 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
+
 local zigbee_test_utils = require "integration_test.zigbee_test_utils"
 local cluster_base = require "st.zigbee.cluster_base"
 local clusters = require "st.zigbee.zcl.clusters"
@@ -58,9 +48,7 @@ local mock_device = test.mock_device.build_test_zigbee_device(
 
 zigbee_test_utils.prepare_zigbee_env_info()
 local function test_init()
-  test.mock_device.add_test_device(mock_device)
-  zigbee_test_utils.init_noop_health_check_timer()
-end
+  test.mock_device.add_test_device(mock_device)end
 
 test.set_test_init_function(test_init)
 
@@ -79,6 +67,7 @@ end
 test.register_coroutine_test(
   "Handle added lifecycle",
   function()
+    -- The initial window shade event should be send during the device's first time onboarding
     test.socket.device_lifecycle:__queue_receive({ mock_device.id, "added" })
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main",
@@ -102,7 +91,28 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", capabilities.battery.battery(100))
     )
-  end
+    -- Avoid sending the initial window shade event after driver switch-over, as the switch-over event itself re-triggers the added lifecycle.
+    test.socket.device_lifecycle:__queue_receive({ mock_device.id, "added" })
+    test.socket.capability:__expect_send(
+      mock_device:generate_test_message("main",
+        capabilities.windowShade.supportedWindowShadeCommands({ "open", "close", "pause" }, {visibility = {displayed = false}}))
+    )
+    test.socket.capability:__expect_send(
+      mock_device:generate_test_message("main", initializedStateWithGuide.initializedStateWithGuide.notInitialized())
+    )
+    test.socket.capability:__expect_send(
+      mock_device:generate_test_message("main", hookLockState.hookLockState.unlocked())
+    )
+    test.socket.capability:__expect_send(
+      mock_device:generate_test_message("main", chargingState.chargingState.stopped())
+    )
+    test.socket.capability:__expect_send(
+      mock_device:generate_test_message("main", capabilities.battery.battery(100))
+    )
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -146,7 +156,10 @@ test.register_coroutine_test(
         PowerConfiguration.attributes.BatteryPercentageRemaining:read(mock_device)
     })
     mock_device:expect_metadata_update({ provisioning_state = "PROVISIONED" })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -160,7 +173,10 @@ test.register_coroutine_test(
       custom_write_attribute(mock_device , WindowCovering.ID, WindowCovering.attributes.Mode.ID,
       data_types.Bitmap8, 0x01, nil)
     })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -172,7 +188,10 @@ test.register_coroutine_test(
     test.socket.zigbee:__expect_send({ mock_device.id,
       cluster_base.write_manufacturer_specific_attribute(mock_device, PRIVATE_CLUSTER_ID,
       PRIVATE_CURTAIN_MANUAL_ATTRIBUTE_ID, MFG_CODE, data_types.Boolean, false) })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 
@@ -200,7 +219,10 @@ test.register_coroutine_test(
       mock_device.id,
       WindowCovering.server.commands.UpOrOpen(mock_device)
     })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -226,7 +248,10 @@ test.register_coroutine_test(
     --     mock_device.id,
     --     WindowCovering.server.commands.DownOrClose(mock_device)
     -- })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -253,7 +278,10 @@ test.register_coroutine_test(
       mock_device.id,
       WindowCovering.server.commands.Stop(mock_device)
     })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -268,7 +296,10 @@ test.register_coroutine_test(
     test.socket.zigbee:__expect_send({ mock_device.id,
       cluster_base.write_manufacturer_specific_attribute(mock_device, PRIVATE_CLUSTER_ID,
       PRIVATE_CURTAIN_LOCKING_SETTING_ATTRIBUTE_ID, MFG_CODE, data_types.Uint8, 0x01) })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -283,7 +314,10 @@ test.register_coroutine_test(
     test.socket.zigbee:__expect_send({ mock_device.id,
       cluster_base.write_manufacturer_specific_attribute(mock_device, PRIVATE_CLUSTER_ID,
       PRIVATE_CURTAIN_LOCKING_SETTING_ATTRIBUTE_ID, MFG_CODE, data_types.Uint8, 0x00) })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -312,7 +346,10 @@ test.register_coroutine_test(
         mock_device.id,
         PowerConfiguration.attributes.BatteryPercentageRemaining:read(mock_device)
     })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 
@@ -329,7 +366,10 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", chargingState.chargingState.charging())
     )
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 
@@ -346,6 +386,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.battery.battery(100))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -362,7 +405,10 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", initializedStateWithGuide.initializedStateWithGuide.initialized())
     )
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -378,7 +424,10 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", capabilities.windowShade.windowShade.opening())
     )
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -394,7 +443,10 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", hookLockState.hookLockState.locking())
     )
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.run_registered_tests()

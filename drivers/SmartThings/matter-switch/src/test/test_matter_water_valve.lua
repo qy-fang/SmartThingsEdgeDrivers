@@ -1,22 +1,16 @@
--- Copyright 2024 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright © 2024 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
 
 local test = require "integration_test"
 local capabilities = require "st.capabilities"
 local t_utils = require "integration_test.utils"
 
 local clusters = require "st.matter.clusters"
+local version = require "version"
+
+if version.api < 11 then
+  clusters.ValveConfigurationAndControl = require "embedded_clusters.ValveConfigurationAndControl"
+end
 
 local mock_device = test.mock_device.build_test_matter_device({
   profile = t_utils.get_profile_definition("water-valve-level.yml"),
@@ -51,22 +45,32 @@ local mock_device = test.mock_device.build_test_matter_device({
   }
 })
 
-local cluster_subscribe_list = {
-  clusters.ValveConfigurationAndControl.attributes.CurrentState,
-  clusters.ValveConfigurationAndControl.attributes.CurrentLevel
-}
-
 local function test_init()
-  local subscribe_request = cluster_subscribe_list[1]:subscribe(mock_device)
-  for i, cluster in ipairs(cluster_subscribe_list) do
-    if i > 1 then
-      subscribe_request:merge(cluster:subscribe(mock_device))
-    end
-  end
-  test.socket.matter:__expect_send({mock_device.id, subscribe_request})
+  test.disable_startup_messages()
   test.mock_device.add_test_device(mock_device)
 end
 test.set_test_init_function(test_init)
+
+test.register_coroutine_test(
+  "Device should be added with correct subscription and profile",
+  function()
+    local cluster_subscribe_list = {
+      clusters.ValveConfigurationAndControl.attributes.CurrentState,
+      clusters.ValveConfigurationAndControl.attributes.CurrentLevel
+    }
+    local subscribe_request = cluster_subscribe_list[1]:subscribe(mock_device)
+    for i, cluster in ipairs(cluster_subscribe_list) do
+      if i > 1 then
+        subscribe_request:merge(cluster:subscribe(mock_device))
+      end
+    end
+    test.socket.device_lifecycle:__queue_receive({ mock_device.id, "init" })
+    test.socket.matter:__expect_send({mock_device.id, subscribe_request})
+    test.socket.device_lifecycle:__queue_receive({ mock_device.id, "doConfigure" })
+    mock_device:expect_metadata_update({ profile = "water-valve-level" })
+    mock_device:expect_metadata_update({ provisioning_state = "PROVISIONED" })
+  end
+)
 
 test.register_message_test(
   "Open command should send the appropriate commands",
@@ -87,6 +91,9 @@ test.register_message_test(
         clusters.ValveConfigurationAndControl.server.commands.Open(mock_device, 1)
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -109,6 +116,9 @@ test.register_message_test(
         clusters.ValveConfigurationAndControl.server.commands.Close(mock_device, 1)
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -130,13 +140,7 @@ test.register_message_test(
         mock_device.id,
         clusters.ValveConfigurationAndControl.server.commands.Open(mock_device, 1, nil, 25)
       }
-    }
-  }
-)
-
-test.register_message_test(
-  "Set level command should send the appropriate commands",
-  {
+    },
     {
       channel = "capability",
       direction = "receive",
@@ -153,6 +157,9 @@ test.register_message_test(
         clusters.ValveConfigurationAndControl.server.commands.Close(mock_device, 1)
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -172,11 +179,7 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.valve.valve.closed())
     },
-  }
-)
-
-test.register_message_test(
-  "Current state reports should generate appropriate events",
+  },
   {
     {
       channel = "matter",
@@ -191,12 +194,6 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.valve.valve.open())
     },
-  }
-)
-
-test.register_message_test(
-  "Current state reports should generate appropriate events",
-  {
     {
       channel = "matter",
       direction = "receive",
@@ -210,6 +207,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.valve.valve.open())
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -229,6 +229,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.level.level(50))
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 

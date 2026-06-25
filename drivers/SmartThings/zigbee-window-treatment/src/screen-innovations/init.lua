@@ -1,21 +1,11 @@
--- Copyright 2024 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright 2024 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
+
 
 -- require st provided libraries
 local capabilities = require "st.capabilities"
 local clusters = require "st.zigbee.zcl.clusters"
-local window_preset_defaults = require "st.zigbee.defaults.windowShadePreset_defaults"
+local window_shade_utils = require "window_shade_utils"
 local device_management = require "st.zigbee.device_management"
 local utils = require "st.utils"
 
@@ -52,9 +42,9 @@ end
 
 -- this is window_shade_preset_cmd
 local function window_shade_preset_cmd(driver, device, command)
-  local go_to_level = device.preferences.presetPosition or device:get_field(window_preset_defaults.PRESET_LEVEL_KEY) or window_preset_defaults.PRESET_LEVEL
+  local level = window_shade_utils.get_preset_level(device, command.component)
   -- send levels without inverting as: 0% closed (i.e., open) to 100% closed
-  device:send_to_component(command.component, WindowCovering.server.commands.GoToLiftPercentage(device, go_to_level))
+  device:send_to_component(command.component, WindowCovering.server.commands.GoToLiftPercentage(device, level))
 end
 
 -- this is device_added
@@ -173,9 +163,7 @@ local screeninnovations_roller_shade_handler = {
       }
     }
   },
-  can_handle = function(opts, driver, device, ...)
-    return device:get_model() == "WM25/L-Z"
-  end
+  can_handle = require("screen-innovations.can_handle"),
 }
 
 -- return the handler

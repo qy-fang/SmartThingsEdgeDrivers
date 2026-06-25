@@ -1,3 +1,4 @@
+local capabilities = require "st.capabilities"
 local cosock = require "cosock"
 local log = require "log"
 local json = require "st.json"
@@ -20,6 +21,7 @@ local lifecycle_handlers = require "handlers.lifecycle_handlers"
 local hue_multi_service_device_utils = require "utils.hue_multi_service_device_utils"
 local lunchbox_util = require "lunchbox.util"
 local utils = require "utils"
+local grouped_utils = require "utils.grouped_utils"
 
 ---@class hue_bridge_utils
 local hue_bridge_utils = {}
@@ -38,6 +40,7 @@ function hue_bridge_utils.do_bridge_network_init(driver, bridge_device, bridge_u
       { [HueApi.APPLICATION_KEY_HEADER] = api_key },
       nil
     )
+    local hue_identifier_to_device_record = utils.get_hue_id_to_device_table_by_bridge(driver, bridge_device) or {}
 
     eventsource.onopen = function(msg)
       log.info_with({ hub_logs = true },
@@ -107,6 +110,11 @@ function hue_bridge_utils.do_bridge_network_init(driver, bridge_device, bridge_u
                     child_device.log.info_with({ hub_logs = true }, "Marking Online after SSE Reconnect")
                     child_device:online()
                     child_device:set_field(Fields.IS_ONLINE, true)
+                    driver:inject_capability_command(child_device, {
+                      capability = capabilities.refresh.ID,
+                      command = capabilities.refresh.commands.refresh.NAME,
+                      args = {}
+                    })
                   elseif status.status == "connectivity_issue" then
                     child_device.log.info_with({ hub_logs = true }, "Marking Offline after SSE Reconnect")
                     child_device:set_field(Fields.IS_ONLINE, false)
@@ -119,7 +127,8 @@ function hue_bridge_utils.do_bridge_network_init(driver, bridge_device, bridge_u
 
           ::continue::
         end
-      end, string.format("Hue Bridge %s Zigbee Scan Task", bridge_device.label))
+        grouped_utils.queue_group_scan(driver, bridge_device)
+      end, string.format("Hue Bridge %s On Connect Task", bridge_device.label))
     end
 
     eventsource.onerror = function()
@@ -163,11 +172,13 @@ function hue_bridge_utils.do_bridge_network_init(driver, bridge_device, bridge_u
               local resource_ids = {}
               if update_data.type == "zigbee_connectivity" and update_data.owner ~= nil then
                 for rid, rtype in pairs(driver.services_for_device_rid[update_data.owner.rid] or {}) do
-                  if driver.hue_identifier_to_device_record[rid] then
+                  if hue_identifier_to_device_record[rid] then
                     log.debug(string.format("Adding RID %s to resource_ids", rid))
                     table.insert(resource_ids, rid)
                   end
                 end
+              elseif grouped_utils.GROUP_TYPES[update_data.type] then
+                grouped_utils.group_update(driver, bridge_device, update_data)
               else
                 --- for a regular message from a device doing something normal,
                 --- you get the resource id of the device service for that device in
@@ -176,7 +187,7 @@ function hue_bridge_utils.do_bridge_network_init(driver, bridge_device, bridge_u
               end
               for _, resource_id in ipairs(resource_ids) do
                 log.debug(string.format("Looking for device record for %s", resource_id))
-                local child_device = driver.hue_identifier_to_device_record[resource_id]
+                local child_device = hue_identifier_to_device_record[resource_id]
                 if child_device ~= nil and child_device.id ~= nil then
                   if update_data.type == "zigbee_connectivity" then
                     log.debug("emitting event for zigbee connectivity")
@@ -193,7 +204,7 @@ function hue_bridge_utils.do_bridge_network_init(driver, bridge_device, bridge_u
             for _, delete_data in ipairs(event.data) do
               if HueDeviceTypes.can_join_device_for_service(delete_data.type) then
                 local resource_id = delete_data.id
-                local child_device = driver.hue_identifier_to_device_record[resource_id]
+                local child_device = hue_identifier_to_device_record[resource_id]
                 if child_device ~= nil and child_device.id ~= nil then
                   log.info(
                     string.format(
@@ -205,6 +216,8 @@ function hue_bridge_utils.do_bridge_network_init(driver, bridge_device, bridge_u
                   child_device.log.trace("Attempting to delete Device UUID " .. tostring(child_device.id))
                   driver:do_hue_child_delete(child_device)
                 end
+              elseif grouped_utils.GROUP_TYPES[delete_data.type] then
+                grouped_utils.group_delete(driver, bridge_device, delete_data)
               end
             end
           elseif event.type == "add" then
@@ -228,6 +241,8 @@ function hue_bridge_utils.do_bridge_network_init(driver, bridge_device, bridge_u
                     bridge_device
                   )
                 end, "New Device Event Task")
+              elseif grouped_utils.GROUP_TYPES[add_data.type] then
+                grouped_utils.group_add(driver, bridge_device, add_data)
               end
             end
           end
@@ -244,6 +259,7 @@ function hue_bridge_utils.do_bridge_network_init(driver, bridge_device, bridge_u
     local bridge_id = parent_bridge and parent_bridge.id
     if bridge_id == bridge_device.id then
       table.insert(ids_to_remove, id)
+      -- we call the handler directly here because we want to use the return value
       local refresh_info = command_handlers.refresh_handler(driver, device)
       if refresh_info and device:get_field(Fields.IS_MULTI_SERVICE) then
         local hue_device_type = utils.determine_device_type(device)

@@ -43,9 +43,7 @@ local mock_device = test.mock_device.build_test_zigbee_device(
 
 zigbee_test_utils.prepare_zigbee_env_info()
 local function test_init()
-  test.mock_device.add_test_device(mock_device)
-  zigbee_test_utils.init_noop_health_check_timer()
-end
+  test.mock_device.add_test_device(mock_device)end
 
 test.set_test_init_function(test_init)
 
@@ -123,7 +121,10 @@ test.register_coroutine_test(
         PollControl.attributes.CheckInInterval:write(mock_device, data_types.Uint32(6480))
     })
     mock_device:expect_metadata_update({ provisioning_state = "PROVISIONED" })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_message_test(
@@ -189,7 +190,8 @@ test.register_message_test(
     }
   },
   {
-    inner_block_ordering = "relaxed"
+    inner_block_ordering = "relaxed",
+    min_api_version = 17
   }
 )
 
@@ -206,6 +208,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.soundSensor.sound.detected())
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -222,6 +227,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.soundSensor.sound.detected())
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -238,6 +246,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.soundSensor.sound.not_detected())
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -254,6 +265,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.battery.battery(28))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -269,7 +283,18 @@ test.register_message_test(
       channel = "capability",
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.temperatureMeasurement.temperature({ value = 25.0, unit = "C"}))
+    },
+    {
+      channel = "devices",
+      direction = "send",
+      message = {
+        "register_native_capability_attr_handler",
+        { device_uuid = mock_device.id, capability_id = "temperatureMeasurement", capability_attr_id = "temperature" }
+      }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -291,6 +316,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.temperatureMeasurement.temperatureRange({ value = { minimum = 20.00, maximum = 30.00 }, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 

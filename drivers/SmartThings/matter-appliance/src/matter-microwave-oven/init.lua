@@ -1,19 +1,10 @@
--- Copyright 2024 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright 2025 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
+
 
 local capabilities = require "st.capabilities"
 local clusters = require "st.matter.clusters"
+local common_utils = require "common-utils"
 local log = require "log"
 local version = require "version"
 
@@ -33,26 +24,16 @@ local OPERATIONAL_STATE_COMMAND_MAP = {
   [clusters.OperationalState.commands.Resume.ID] = "resume",
 }
 
-local MICROWAVE_OVEN_DEVICE_TYPE_ID = 0x0079
 local DEFAULT_COOKING_MODE = 0
 local DEFAULT_COOKING_TIME = 30
 local MICROWAVE_OVEN_SUPPORTED_MODES_KEY = "__microwave_oven_supported_modes__"
 
 local function device_init(driver, device)
+  common_utils.check_field_name_updates(device)
   device:subscribe()
   device:send(clusters.MicrowaveOvenControl.attributes.MaxCookTime:read(device, device.MATTER_DEFAULT_ENDPOINT))
 end
 
-local function is_matter_mircowave_oven(opts, driver, device)
-  for _, ep in ipairs(device.endpoints) do
-    for _, dt in ipairs(ep.device_types) do
-      if dt.device_type_id == MICROWAVE_OVEN_DEVICE_TYPE_ID then
-        return true
-      end
-    end
-  end
-  return false
-end
 
 local function get_last_set_cooking_parameters(device)
   local cookingTime = device:get_latest_state("main", capabilities.cookTime.ID, capabilities.cookTime.cookTime.NAME) or DEFAULT_COOKING_TIME
@@ -230,7 +211,7 @@ end
 local matter_microwave_oven = {
   NAME = "matter-microwave-oven",
   lifecycle_handlers = {
-    init = device_init,
+    init = device_init
   },
   matter_handlers = {
     attr = {
@@ -238,38 +219,38 @@ local matter_microwave_oven = {
         [clusters.OperationalState.attributes.AcceptedCommandList.ID] =
             operational_state_accepted_command_list_attr_handler,
         [clusters.OperationalState.attributes.OperationalState.ID] = operational_state_attr_handler,
-        [clusters.OperationalState.attributes.OperationalError.ID] = operational_error_attr_handler,
+        [clusters.OperationalState.attributes.OperationalError.ID] = operational_error_attr_handler
       },
       [clusters.MicrowaveOvenMode.ID] = {
         [clusters.MicrowaveOvenMode.attributes.SupportedModes.ID] = microwave_oven_supported_modes_handler,
-        [clusters.MicrowaveOvenMode.attributes.CurrentMode.ID] = microwave_oven_current_mode_handler,
+        [clusters.MicrowaveOvenMode.attributes.CurrentMode.ID] = microwave_oven_current_mode_handler
       },
       [clusters.MicrowaveOvenControl.ID] = {
         [clusters.MicrowaveOvenControl.attributes.MaxCookTime.ID] = microwave_oven_max_cook_time_handler,
-        [clusters.MicrowaveOvenControl.attributes.CookTime.ID] = microwave_oven_cook_time_handler,
+        [clusters.MicrowaveOvenControl.attributes.CookTime.ID] = microwave_oven_cook_time_handler
       }
-    },
+    }
   },
   capability_handlers = {
     [capabilities.operationalState.ID] = {
       [capabilities.operationalState.commands.start.NAME] = handle_operational_state_start,
       [capabilities.operationalState.commands.stop.NAME] = handle_operational_state_stop,
       [capabilities.operationalState.commands.pause.NAME] = handle_operational_state_pause,
-      [capabilities.operationalState.commands.resume.NAME] = handle_operational_state_resume,
+      [capabilities.operationalState.commands.resume.NAME] = handle_operational_state_resume
     },
     [capabilities.mode.ID] = {
-      [capabilities.mode.commands.setMode.NAME] = handle_microwave_oven_mode,
+      [capabilities.mode.commands.setMode.NAME] = handle_microwave_oven_mode
     },
     [capabilities.cookTime.ID] = {
-      [capabilities.cookTime.commands.setCookTime.NAME] = handle_set_cooking_time,
-    },
+      [capabilities.cookTime.commands.setCookTime.NAME] = handle_set_cooking_time
+    }
   },
   supported_capabilities = {
     capabilities.operationalState,
     capabilities.mode,
     capabilities.cookTime
   },
-  can_handle = is_matter_mircowave_oven,
+  can_handle = require("matter-microwave-oven.can_handle"),
 }
 
 return matter_microwave_oven

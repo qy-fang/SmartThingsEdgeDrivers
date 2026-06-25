@@ -19,6 +19,8 @@ local Fields = {
   DEVICE_TYPE = "devicetype",
   EVENT_SOURCE = "eventsource",
   GAMUT = "gamut",
+  GROUPS = "groups",
+  GROUPS_SCAN_QUEUE = "groups_scan_queue",
   HUE_DEVICE_ID = "hue_device_id",
   IPV4 = "ipv4",
   IS_ONLINE = "is_online",
@@ -33,6 +35,7 @@ local Fields = {
   COLOR_SATURATION = "color_saturation",
   COLOR_HUE = "color_hue",
   SWITCH_STATE = "switch_state_cache",
+  COLOR_TEMP_SETPOINT = "ct_setpoint"
 }
 
 return Fields

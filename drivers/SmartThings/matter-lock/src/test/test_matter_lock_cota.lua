@@ -1,34 +1,9 @@
--- Copyright 2022 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright 2022 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
 
--- Copyright 2022 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
--- Mock out globals
+
 local test = require "integration_test"
 local capabilities = require "st.capabilities"
-test.add_package_capability("lockAlarm.yml")
 local t_utils = require "integration_test.utils"
 local json = require "st.json"
 local clusters = require "st.matter.clusters"
@@ -64,6 +39,9 @@ local mock_device_record = {
 local mock_device = test.mock_device.build_test_matter_device(mock_device_record)
 
 local function test_init()
+  test.disable_startup_messages()
+  test.mock_device.add_test_device(mock_device)
+  test.socket.device_lifecycle:__queue_receive({ mock_device.id, "init" })
   local subscribe_request = DoorLock.attributes.LockState:subscribe(mock_device)
   subscribe_request:merge(clusters.PowerSource.attributes.BatPercentRemaining:subscribe(mock_device))
   subscribe_request:merge(DoorLock.events.LockUserChange:subscribe(mock_device))
@@ -71,7 +49,9 @@ local function test_init()
   subscribe_request:merge(DoorLock.events.DoorLockAlarm:subscribe(mock_device))
   test.socket["matter"]:__expect_send({mock_device.id, subscribe_request})
   test.socket.matter:__expect_send({mock_device.id, DoorLock.attributes.RequirePINforRemoteOperation:read(mock_device, 10)})
-  test.mock_device.add_test_device(mock_device)
+  test.socket.device_lifecycle:__queue_receive({ mock_device.id, "doConfigure" })
+  mock_device:expect_metadata_update({ provisioning_state = "PROVISIONED" })
+  test.socket.matter:__expect_send({mock_device.id, clusters.PowerSource.attributes.AttributeList:read()})
 end
 
 test.set_test_init_function(test_init)
@@ -163,7 +143,10 @@ test.register_coroutine_test(
   "Added should kick off cota cred process", function()
     test.socket.matter:__set_channel_ordering("relaxed")
     expect_kick_off_cota_process(mock_device)
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -177,7 +160,10 @@ test.register_coroutine_test(
         mock_device.id,
         clusters.DoorLock.server.commands.UnlockDoor(mock_device, 10, "1111"),
       })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -191,7 +177,10 @@ test.register_coroutine_test(
         mock_device.id,
         clusters.DoorLock.server.commands.LockDoor(mock_device, 10, "1111"),
       })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -223,7 +212,10 @@ test.register_coroutine_test(
         DoorLock.types.DlUserType.REMOTE_ONLY_USER -- user_type
       )
     })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -244,7 +236,10 @@ test.register_coroutine_test(
       profile = "nonfunctional-lock",
       provisioning_state = "NONFUNCTIONAL"
     })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -343,7 +338,10 @@ test.register_coroutine_test(
     )
     local read_attribute_list = clusters.PowerSource.attributes.AttributeList:read()
     test.socket.matter:__expect_send({mock_device.id, read_attribute_list})
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -438,7 +436,10 @@ test.register_coroutine_test(
     )
     local read_attribute_list = clusters.PowerSource.attributes.AttributeList:read()
     test.socket.matter:__expect_send({mock_device.id, read_attribute_list})
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -526,7 +527,10 @@ test.register_coroutine_test(
     )
     local read_attribute_list = clusters.PowerSource.attributes.AttributeList:read()
     test.socket.matter:__expect_send({mock_device.id, read_attribute_list})
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -583,7 +587,10 @@ test.register_coroutine_test(
         DoorLock.types.DlUserType.REMOTE_ONLY_USER -- user_type
       )
     })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -620,7 +627,10 @@ test.register_coroutine_test(
       )
     })
     test.mock_time.advance_time(2)
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 
@@ -698,7 +708,10 @@ test.register_coroutine_test(
         DoorLock.types.DlUserType.REMOTE_ONLY_USER -- user_type
       )
     })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -730,12 +743,18 @@ test.register_coroutine_test(
         DoorLock.types.DlUserType.REMOTE_ONLY_USER -- user_type
       )
     })
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
   "Delay setting COTA cred if another cred is already being set.", function()
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.run_registered_tests()

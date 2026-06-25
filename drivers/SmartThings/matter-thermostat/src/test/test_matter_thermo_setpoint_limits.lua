@@ -1,21 +1,10 @@
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright © 2025 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
 
 local test = require "integration_test"
 local capabilities = require "st.capabilities"
 local t_utils = require "integration_test.utils"
 local uint32 = require "st.matter.data_types.Uint32"
-
 local clusters = require "st.matter.clusters"
 
 local mock_device = test.mock_device.build_test_matter_device({
@@ -70,13 +59,15 @@ local function test_init()
     clusters.TemperatureMeasurement.attributes.MinMeasuredValue,
     clusters.TemperatureMeasurement.attributes.MaxMeasuredValue,
   }
-  test.socket.matter:__set_channel_ordering("relaxed")
   local subscribe_request = cluster_subscribe_list[1]:subscribe(mock_device)
   for i, cluster in ipairs(cluster_subscribe_list) do
     if i > 1 then
       subscribe_request:merge(cluster:subscribe(mock_device))
     end
   end
+  test.socket.capability:__expect_send(
+    mock_device:generate_test_message("main", capabilities.thermostatOperatingState.supportedThermostatOperatingStates({"idle", "heating", "cooling"}, {visibility = {displayed = false}}))
+  )
   test.socket.matter:__expect_send({mock_device.id, subscribe_request})
 
   local read_setpoint_deadband = clusters.Thermostat.attributes.MinSetpointDeadBand:read()
@@ -84,7 +75,17 @@ local function test_init()
 
   test.mock_device.add_test_device(mock_device)
 
-  test.set_rpc_version(5)
+  test.socket.device_lifecycle:__queue_receive({ mock_device.id, "added" })
+  local read_req = clusters.Thermostat.attributes.ControlSequenceOfOperation:read()
+  read_req:merge(clusters.FanControl.attributes.FanModeSequence:read())
+  read_req:merge(clusters.FanControl.attributes.WindSupport:read())
+  read_req:merge(clusters.FanControl.attributes.RockSupport:read())
+  read_req:merge(clusters.FanControl.attributes.RockSupport:read())
+  read_req:merge(clusters.PowerSource.attributes.AttributeList:read())
+  read_req:merge(clusters.Thermostat.attributes.AttributeList:read())
+  test.socket.matter:__expect_send({mock_device.id, read_req})
+
+  test.set_rpc_version(6)
 end
 test.set_test_init_function(test_init)
 
@@ -95,13 +96,11 @@ local function configure(device)
   test.socket.device_lifecycle:__queue_receive({ mock_device.id, "doConfigure" })
   mock_device:expect_metadata_update({ provisioning_state = "PROVISIONED" })
 
-  local read_attribute_list_req = clusters.PowerSource.attributes.AttributeList:read()
-  test.socket.matter:__expect_send({mock_device.id, read_attribute_list_req})
-
   test.wait_for_events()
 
   test.socket.matter:__queue_receive({mock_device.id, clusters.PowerSource.attributes.AttributeList:build_test_report_data(mock_device, 1, {uint32(0x0C)})})
-  mock_device:expect_metadata_update({ profile = "thermostat-nostate" })
+  test.socket.matter:__queue_receive({mock_device.id, clusters.Thermostat.attributes.AttributeList:build_test_report_data(mock_device, 1, {uint32(0x29)})})
+  mock_device:expect_metadata_update({ profile = "thermostat" })
 
   --populate cached setpoint values. This would normally happen due to subscription setup.
   test.socket.matter:__queue_receive({
@@ -113,13 +112,13 @@ local function configure(device)
     clusters.Thermostat.attributes.OccupiedCoolingSetpoint:build_test_report_data(mock_device, 1, 2667) --26.67 celcius
   })
   test.socket.capability:__expect_send(
-    device:generate_test_message("main", capabilities.thermostatHeatingSetpoint.heatingSetpointRange({ value = { minimum = 5.00, maximum = 40.00, step = 0.1 }, unit = "C" }))
+    device:generate_test_message("main", capabilities.thermostatHeatingSetpoint.heatingSetpointRange({ value = { minimum = 0.00, maximum = 100.00, step = 0.1 }, unit = "C" }))
   )
   test.socket.capability:__expect_send(
     device:generate_test_message("main", capabilities.thermostatHeatingSetpoint.heatingSetpoint({ value = 24.44, unit = "C" }))
   )
   test.socket.capability:__expect_send(
-    device:generate_test_message("main", capabilities.thermostatCoolingSetpoint.coolingSetpointRange({ value = { minimum = 5.00, maximum = 40.00, step = 0.1 }, unit = "C" }))
+    device:generate_test_message("main", capabilities.thermostatCoolingSetpoint.coolingSetpointRange({ value = { minimum = 0.00, maximum = 100.00, step = 0.1 }, unit = "C" }))
   )
   test.socket.capability:__expect_send(
     device:generate_test_message("main", capabilities.thermostatCoolingSetpoint.coolingSetpoint({ value = 26.67, unit = "C" }))
@@ -149,7 +148,10 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", cached_heating_setpoint)
     )
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -175,7 +177,10 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", cached_cooling_setpoint)
     )
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -201,7 +206,10 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", cached_heating_setpoint)
     )
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -227,7 +235,10 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", cached_cooling_setpoint)
     )
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -246,7 +257,10 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", cached_heating_setpoint)
     )
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -265,7 +279,10 @@ test.register_coroutine_test(
     test.socket.capability:__expect_send(
       mock_device:generate_test_message("main", cached_cooling_setpoint)
     )
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -278,7 +295,10 @@ test.register_coroutine_test(
     test.wait_for_events()
     local min_setpoint_deadband_checked = mock_device:get_field("MIN_SETPOINT_DEADBAND_CHECKED")
     assert(min_setpoint_deadband_checked == true, "min_setpoint_deadband_checked is True")
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 test.register_message_test(
@@ -305,6 +325,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.thermostatCoolingSetpoint.coolingSetpointRange({ value = { minimum = 10.00, maximum = 32.22, step = 0.1 }, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -332,6 +355,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.thermostatHeatingSetpoint.heatingSetpointRange({ value = { minimum = 10.00, maximum = 32.22, step = 0.1 }, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -359,6 +385,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.temperatureMeasurement.temperatureRange({ value = { minimum = 5.00, maximum = 39.00 }, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 

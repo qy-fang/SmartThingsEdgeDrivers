@@ -1,36 +1,29 @@
--- Copyright 2024 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright © 2025 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
+
 local test = require "integration_test"
+test.set_rpc_version(0)
 local capabilities = require "st.capabilities"
 local t_utils = require "integration_test.utils"
 local SinglePrecisionFloat = require "st.matter.data_types.SinglePrecisionFloat"
-
 local clusters = require "st.matter.clusters"
+local version = require "version"
 
-clusters.HepaFilterMonitoring = require "HepaFilterMonitoring"
-clusters.ActivatedCarbonFilterMonitoring = require "ActivatedCarbonFilterMonitoring"
-clusters.AirQuality = require "AirQuality"
-clusters.CarbonMonoxideConcentrationMeasurement = require "CarbonMonoxideConcentrationMeasurement"
-clusters.CarbonDioxideConcentrationMeasurement = require "CarbonDioxideConcentrationMeasurement"
-clusters.FormaldehydeConcentrationMeasurement = require "FormaldehydeConcentrationMeasurement"
-clusters.NitrogenDioxideConcentrationMeasurement = require "NitrogenDioxideConcentrationMeasurement"
-clusters.OzoneConcentrationMeasurement = require "OzoneConcentrationMeasurement"
-clusters.Pm1ConcentrationMeasurement = require "Pm1ConcentrationMeasurement"
-clusters.Pm10ConcentrationMeasurement = require "Pm10ConcentrationMeasurement"
-clusters.Pm25ConcentrationMeasurement = require "Pm25ConcentrationMeasurement"
-clusters.RadonConcentrationMeasurement = require "RadonConcentrationMeasurement"
-clusters.TotalVolatileOrganicCompoundsConcentrationMeasurement = require "TotalVolatileOrganicCompoundsConcentrationMeasurement"
+if version.api < 10 then
+  clusters.HepaFilterMonitoring = require "embedded_clusters.HepaFilterMonitoring"
+  clusters.ActivatedCarbonFilterMonitoring = require "embedded_clusters.ActivatedCarbonFilterMonitoring"
+  clusters.AirQuality = require "embedded_clusters.AirQuality"
+  clusters.CarbonMonoxideConcentrationMeasurement = require "embedded_clusters.CarbonMonoxideConcentrationMeasurement"
+  clusters.CarbonDioxideConcentrationMeasurement = require "embedded_clusters.CarbonDioxideConcentrationMeasurement"
+  clusters.FormaldehydeConcentrationMeasurement = require "embedded_clusters.FormaldehydeConcentrationMeasurement"
+  clusters.NitrogenDioxideConcentrationMeasurement = require "embedded_clusters.NitrogenDioxideConcentrationMeasurement"
+  clusters.OzoneConcentrationMeasurement = require "embedded_clusters.OzoneConcentrationMeasurement"
+  clusters.Pm1ConcentrationMeasurement = require "embedded_clusters.Pm1ConcentrationMeasurement"
+  clusters.Pm10ConcentrationMeasurement = require "embedded_clusters.Pm10ConcentrationMeasurement"
+  clusters.Pm25ConcentrationMeasurement = require "embedded_clusters.Pm25ConcentrationMeasurement"
+  clusters.RadonConcentrationMeasurement = require "embedded_clusters.RadonConcentrationMeasurement"
+  clusters.TotalVolatileOrganicCompoundsConcentrationMeasurement = require "embedded_clusters.TotalVolatileOrganicCompoundsConcentrationMeasurement"
+end
 
 local mock_device = test.mock_device.build_test_matter_device({
   profile = t_utils.get_profile_definition("air-purifier-hepa-ac-wind.yml"),
@@ -49,13 +42,13 @@ local mock_device = test.mock_device.build_test_matter_device({
       }
     },
     {
-        endpoint_id = 1,
-        clusters = {
-          {cluster_id = clusters.FanControl.ID, cluster_type = "SERVER"},
-          {cluster_id = clusters.HepaFilterMonitoring.ID, cluster_type = "SERVER"},
-          {cluster_id = clusters.ActivatedCarbonFilterMonitoring.ID, cluster_type = "SERVER"},
-        }
+      endpoint_id = 1,
+      clusters = {
+        {cluster_id = clusters.FanControl.ID, cluster_type = "SERVER"},
+        {cluster_id = clusters.HepaFilterMonitoring.ID, cluster_type = "SERVER"},
+        {cluster_id = clusters.ActivatedCarbonFilterMonitoring.ID, cluster_type = "SERVER"},
       }
+    }
   }
 })
 
@@ -76,13 +69,13 @@ local mock_device_rock = test.mock_device.build_test_matter_device({
       }
     },
     {
-        endpoint_id = 1,
-        clusters = {
-          {cluster_id = clusters.FanControl.ID, cluster_type = "SERVER"},
-          {cluster_id = clusters.HepaFilterMonitoring.ID, cluster_type = "SERVER"},
-          {cluster_id = clusters.ActivatedCarbonFilterMonitoring.ID, cluster_type = "SERVER"},
-        }
+      endpoint_id = 1,
+      clusters = {
+        {cluster_id = clusters.FanControl.ID, cluster_type = "SERVER"},
+        {cluster_id = clusters.HepaFilterMonitoring.ID, cluster_type = "SERVER"},
+        {cluster_id = clusters.ActivatedCarbonFilterMonitoring.ID, cluster_type = "SERVER"},
       }
+    }
   }
 })
 
@@ -310,9 +303,6 @@ local cluster_subscribe_list_configured = {
     clusters.Thermostat.attributes.SystemMode,
     clusters.Thermostat.attributes.ControlSequenceOfOperation
   },
-  [capabilities.thermostatOperatingState.ID] = {
-    clusters.Thermostat.attributes.ThermostatRunningState
-  },
   [capabilities.thermostatFanMode.ID] = {
     clusters.FanControl.attributes.FanModeSequence,
     clusters.FanControl.attributes.FanMode
@@ -434,22 +424,32 @@ end
 test.register_coroutine_test(
   "Test profile change on init for AP and AQS combined device type",
   function()
+    mock_device_ap_aqs:set_field("__BATTERY_SUPPORT", "NO_BATTERY") -- since we're assuming this would have happened during device_added in this case.
+    mock_device_ap_aqs:set_field("__THERMOSTAT_RUNNING_STATE_SUPPORT", false) -- since we're assuming this would have happened during device_added in this case.
     test.socket.device_lifecycle:__queue_receive({ mock_device_ap_aqs.id, "doConfigure" })
     mock_device_ap_aqs:expect_metadata_update({ profile = "air-purifier-hepa-ac-aqs-co2-tvoc-meas-co2-radon-level" })
     mock_device_ap_aqs:expect_metadata_update({ provisioning_state = "PROVISIONED" })
   end,
-  { test_init = test_init_ap_aqs }
+  {
+    test_init = test_init_ap_aqs,
+    min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
   "Test profile change on init for AP and Thermo and AQS combined device type",
   function()
+    mock_device_ap_thermo_aqs:set_field("__BATTERY_SUPPORT", "NO_BATTERY") -- since we're assuming this would have happened during device_added in this case.
+    mock_device_ap_thermo_aqs:set_field("__THERMOSTAT_RUNNING_STATE_SUPPORT", false) -- since we're assuming this would have happened during device_added in this case.
     test.socket.device_lifecycle:__queue_receive({ mock_device_ap_thermo_aqs.id, "doConfigure" })
     mock_device_ap_thermo_aqs:expect_metadata_update({ profile = "air-purifier-hepa-ac-rock-wind-thermostat-humidity-fan-heating-only-nostate-nobattery-aqs-pm10-pm25-ch2o-meas-pm10-pm25-ch2o-no2-tvoc-level" })
     mock_device_ap_thermo_aqs:expect_metadata_update({ provisioning_state = "PROVISIONED" })
     print(mock_device_ap_thermo_aqs.profile)
   end,
-  { test_init = test_init_ap_thermo_aqs }
+  {
+    test_init = test_init_ap_thermo_aqs,
+    min_api_version = 17
+  }
 )
 
 test.register_coroutine_test(
@@ -471,7 +471,10 @@ test.register_coroutine_test(
       mock_device_ap_thermo_aqs_preconfigured:generate_test_message("main", capabilities.formaldehydeMeasurement.formaldehydeLevel({value = 14, unit = "ppm"}))
     )
   end,
-  { test_init = test_init_ap_thermo_aqs_preconfigured }
+  {
+    test_init = test_init_ap_thermo_aqs_preconfigured,
+    min_api_version = 17
+  }
 )
 
 test.register_message_test(
@@ -525,6 +528,9 @@ test.register_message_test(
         clusters.FanControl.attributes.FanMode:write(mock_device, 1, clusters.FanControl.attributes.FanMode.AUTO)
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -566,6 +572,9 @@ test.register_message_test(
         capabilities.airPurifierFanMode.airPurifierFanMode.high.NAME
       }, {visibility={displayed=false}}))
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -601,6 +610,9 @@ test.register_message_test(
         clusters.FanControl.attributes.PercentSetting:write(mock_device, 1, 50)
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -646,6 +658,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.airPurifierFanMode.airPurifierFanMode.high())
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -704,6 +719,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("activatedCarbonFilter", capabilities.filterStatus.filterStatus.replace())
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -757,6 +775,9 @@ test.register_message_test(
         clusters.FanControl.attributes.WindSetting:write(mock_device, 1, clusters.FanControl.types.WindSettingMask.NATURAL_WIND)
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -776,6 +797,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("main", capabilities.fanSpeedPercent.percent(100))
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -844,6 +868,53 @@ test.register_message_test(
         clusters.FanControl.attributes.RockSetting:write(mock_device_rock, 1, clusters.FanControl.types.RockBitmap.ROCK_UP_DOWN)
       }
     }
+  },
+  {
+     min_api_version = 17
+  }
+)
+
+test.register_coroutine_test(
+  "Test set heating setpoint on thermostat endpoint",
+  function()
+    test.socket.capability:__queue_receive({
+      mock_device_ap_thermo_aqs_preconfigured.id,
+      { capability = "thermostatHeatingSetpoint", component = "main", command = "setHeatingSetpoint", args = { 21 } }
+    })
+    test.socket.matter:__expect_send({
+      mock_device_ap_thermo_aqs_preconfigured.id,
+      clusters.Thermostat.attributes.OccupiedHeatingSetpoint:write(mock_device_ap_thermo_aqs_preconfigured, 7, 2100)
+    })
+  end,
+  {
+    test_init = test_init_ap_thermo_aqs_preconfigured,
+    min_api_version = 17
+  }
+)
+
+test.register_coroutine_test(
+  "Test filter state reset command",
+  function()
+    test.socket.capability:__queue_receive({
+      mock_device_ap_thermo_aqs_preconfigured.id,
+      { capability = "filterState", component = "hepaFilter", command = "resetFilter", args = { } }
+    })
+    test.socket.matter:__expect_send({
+      mock_device_ap_thermo_aqs_preconfigured.id,
+      clusters.HepaFilterMonitoring.server.commands.ResetCondition(mock_device_ap_thermo_aqs_preconfigured, 1)
+    })
+    test.socket.capability:__queue_receive({
+      mock_device_ap_thermo_aqs_preconfigured.id,
+      { capability = "filterState", component = "activatedCarbonFilter", command = "resetFilter", args = { } }
+    })
+    test.socket.matter:__expect_send({
+      mock_device_ap_thermo_aqs_preconfigured.id,
+      clusters.ActivatedCarbonFilterMonitoring.server.commands.ResetCondition(mock_device_ap_thermo_aqs_preconfigured, 1)
+    })
+  end,
+  {
+    test_init = test_init_ap_thermo_aqs_preconfigured,
+    min_api_version = 17
   }
 )
 

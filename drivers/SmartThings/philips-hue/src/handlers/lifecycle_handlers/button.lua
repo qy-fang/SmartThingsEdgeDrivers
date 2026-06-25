@@ -5,8 +5,6 @@ local st_utils = require "st.utils"
 ---@type fun(val: any?, name: string?, multi_line: boolean?): string
 st_utils.stringify_table = st_utils.stringify_table
 
-local refresh_handler = require("handlers.commands").refresh_handler
-
 local Discovery = require "disco"
 local Fields = require "fields"
 local HueDeviceTypes = require "hue_device_types"
@@ -54,8 +52,9 @@ function ButtonLifecycleHandlers.added(driver, device, parent_device_id, resourc
   end
 
   local button_rid_to_index_map = {}
+  local hue_id_to_device = utils.get_hue_id_to_device_table_by_bridge(driver, device) or {}
   if button_info.button then
-    driver.hue_identifier_to_device_record[button_info.id] = device
+    hue_id_to_device[button_info.id] = device
     button_rid_to_index_map[button_info.id] = 1
   end
 
@@ -67,7 +66,7 @@ function ButtonLifecycleHandlers.added(driver, device, parent_device_id, resourc
       local button_id = button_info[button_id_key]
 
       if button and button_id then
-        driver.hue_identifier_to_device_record[button_id] = device
+        hue_id_to_device[button_id] = device
         button_rid_to_index_map[button_id] = var
 
         local supported_button_values = utils.get_supported_button_values(button.event_values)
@@ -88,7 +87,7 @@ function ButtonLifecycleHandlers.added(driver, device, parent_device_id, resourc
   end
 
   if button_info.power_id then
-    driver.hue_identifier_to_device_record[button_info.power_id] = device
+    hue_id_to_device[button_info.power_id] = device
   end
 
   log.debug(st_utils.stringify_table(button_rid_to_index_map, "button index map", true))
@@ -100,7 +99,7 @@ function ButtonLifecycleHandlers.added(driver, device, parent_device_id, resourc
   device:set_field(Fields._ADDED, true, { persist = true })
   device:set_field(Fields._REFRESH_AFTER_INIT, true, { persist = true })
 
-  driver.hue_identifier_to_device_record[device_button_resource_id] = device
+  hue_id_to_device[device_button_resource_id] = device
 end
 
 ---@param driver HueDriver
@@ -116,9 +115,29 @@ function ButtonLifecycleHandlers.init(driver, device)
   log.debug("resource id " .. tostring(device_button_resource_id))
 
   local hue_device_id = device:get_field(Fields.HUE_DEVICE_ID)
-  if not driver.hue_identifier_to_device_record[device_button_resource_id] then
-    driver.hue_identifier_to_device_record[device_button_resource_id] = device
+  local hue_id_to_device = utils.get_hue_id_to_device_table_by_bridge(driver, device) or {}
+  if not hue_id_to_device[device_button_resource_id] then
+    hue_id_to_device[device_button_resource_id] = device
   end
+
+  local maybe_idx_map = device:get_field(Fields.BUTTON_INDEX_MAP)
+  local svc_rids_for_device = driver.services_for_device_rid[hue_device_id] or {}
+
+  if not svc_rids_for_device[device_button_resource_id] then
+    svc_rids_for_device[device_button_resource_id] = HueDeviceTypes.BUTTON
+  end
+
+  for resource_id, _ in pairs(maybe_idx_map or {}) do
+    if not hue_id_to_device[resource_id] then
+      hue_id_to_device[resource_id] = device
+    end
+
+    if not svc_rids_for_device[resource_id] then
+      svc_rids_for_device[resource_id] = HueDeviceTypes.BUTTON
+    end
+  end
+  driver.services_for_device_rid[hue_device_id] = svc_rids_for_device
+
   local button_info, err
   button_info = Discovery.device_state_disco_cache[device_button_resource_id]
   if not button_info then
@@ -160,7 +179,11 @@ function ButtonLifecycleHandlers.init(driver, device)
   end
   device:set_field(Fields._INIT, true, { persist = false })
   if device:get_field(Fields._REFRESH_AFTER_INIT) then
-    refresh_handler(driver, device)
+    driver:inject_capability_command(device, {
+      capability = capabilities.refresh.ID,
+      command = capabilities.refresh.commands.refresh.NAME,
+      args = {}
+    })
     device:set_field(Fields._REFRESH_AFTER_INIT, false, { persist = true })
   end
 end

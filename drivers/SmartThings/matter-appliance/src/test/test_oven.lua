@@ -1,21 +1,13 @@
--- Copyright 2024 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright 2025 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
+
 
 local test = require "integration_test"
+test.set_rpc_version(6)
 local clusters = require "st.matter.clusters"
 local capabilities = require "st.capabilities"
 local t_utils = require "integration_test.utils"
+local version = require "version"
 
 local OVEN_ENDPOINT = 1
 local OVEN_TCC_ONE_ENDPOINT = 2
@@ -24,8 +16,13 @@ local COOK_TOP_ENDPOINT = 4
 local COOK_SURFACE_ONE_ENDPOINT = 5
 local COOK_SURFACE_TWO_ENDPOINT = 6
 
-clusters.OvenMode = require "OvenMode"
-clusters.TemperatureControl = require "TemperatureControl"
+if version.api < 10 then
+  clusters.TemperatureControl = require "TemperatureControl"
+end
+
+if version.api < 12 then
+  clusters.OvenMode = require "OvenMode"
+end
 
 local mock_device = test.mock_device.build_test_matter_device({
   profile = t_utils.get_profile_definition("oven-cabinet-one-tn-cabinet-two-tl-cook-top-cook-surface-one-tl-cook-surface-two-tl.yml"),
@@ -105,6 +102,8 @@ local mock_device = test.mock_device.build_test_matter_device({
 })
 
 local function test_init()
+  test.disable_startup_messages()
+  test.mock_device.add_test_device(mock_device)
   local cluster_subscribe_list = {
     clusters.OnOff.attributes.OnOff,
     clusters.TemperatureMeasurement.attributes.MeasuredValue,
@@ -116,7 +115,6 @@ local function test_init()
     clusters.OvenMode.attributes.CurrentMode,
     clusters.OvenMode.attributes.SupportedModes,
   }
-  test.socket.matter:__set_channel_ordering("relaxed")
   local subscribe_request = cluster_subscribe_list[1]:subscribe(mock_device)
   for i, cluster in ipairs(cluster_subscribe_list) do
     if i > 1 then
@@ -124,9 +122,11 @@ local function test_init()
     end
   end
   test.socket.matter:__expect_send({ mock_device.id, subscribe_request })
-  test.mock_device.add_test_device(mock_device)
   test.socket.device_lifecycle:__queue_receive({ mock_device.id, "added" })
-  test.set_rpc_version(5)
+  test.socket.device_lifecycle:__queue_receive({ mock_device.id, "init" })
+  test.socket.matter:__expect_send({ mock_device.id, subscribe_request })
+  test.socket.device_lifecycle:__queue_receive({ mock_device.id, "doConfigure"})
+  mock_device:expect_metadata_update({ provisioning_state = "PROVISIONED" })
 end
 test.set_test_init_function(test_init)
 
@@ -141,7 +141,10 @@ test.register_coroutine_test(
       "Cook Surface One Endpoint must be 5")
     assert(component_to_endpoint_map["cookSurfaceTwo"] == COOK_SURFACE_TWO_ENDPOINT,
       "Cook Surface Two Endpoint must be 6")
-  end
+  end,
+  {
+     min_api_version = 17
+  }
 )
 
 
@@ -201,6 +204,9 @@ test.register_message_test(
         clusters.OvenMode.commands.ChangeToMode(mock_device, OVEN_TCC_ONE_ENDPOINT, 0) --Index where Grill is stored)
       }
     }
+  },
+  {
+    min_api_version = 19
   }
 )
 
@@ -220,6 +226,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("tccOne", capabilities.temperatureMeasurement.temperature({ value = 40.0, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -276,6 +285,9 @@ test.register_message_test(
         clusters.TemperatureControl.commands.SetTemperature(mock_device, OVEN_TCC_ONE_ENDPOINT, 130 * 100, nil)
       }
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -335,6 +347,9 @@ test.register_message_test(
         clusters.OvenMode.commands.ChangeToMode(mock_device, OVEN_TCC_TWO_ENDPOINT, 1) --Index where Pre Heat is stored
       }
     }
+  },
+  {
+     min_api_version = 19
   }
 )
 
@@ -354,6 +369,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("tccTwo", capabilities.temperatureMeasurement.temperature({ value = 50.0, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -391,6 +409,9 @@ test.register_message_test(
         clusters.TemperatureControl.server.commands.SetTemperature(mock_device, OVEN_TCC_TWO_ENDPOINT, nil, 0) --0 is the index where Level1 is stored.
       }
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -414,6 +435,9 @@ test.register_message_test(
         clusters.OnOff.server.commands.Off(mock_device, COOK_TOP_ENDPOINT)
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -449,6 +473,9 @@ test.register_message_test(
         clusters.TemperatureControl.server.commands.SetTemperature(mock_device, COOK_SURFACE_ONE_ENDPOINT, nil, 2) -- 2 is the index where Level 5 is stored.
       }
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -484,6 +511,9 @@ test.register_message_test(
         clusters.TemperatureControl.server.commands.SetTemperature(mock_device, COOK_SURFACE_TWO_ENDPOINT, nil, 1) -- 1 is the index where Level 4 is stored.
       }
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -503,6 +533,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("cookSurfaceOne", capabilities.temperatureMeasurement.temperature({ value = 40.0, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -522,6 +555,9 @@ test.register_message_test(
       direction = "send",
       message = mock_device:generate_test_message("cookSurfaceTwo", capabilities.temperatureMeasurement.temperature({ value = 20.0, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 

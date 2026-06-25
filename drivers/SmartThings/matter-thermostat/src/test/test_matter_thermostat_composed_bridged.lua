@@ -1,22 +1,9 @@
--- Copyright 2023 SmartThings
---
--- Licensed under the Apache License, Version 2.0 (the "License");
--- you may not use this file except in compliance with the License.
--- You may obtain a copy of the License at
---
---     http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing, software
--- distributed under the License is distributed on an "AS IS" BASIS,
--- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--- See the License for the specific language governing permissions and
--- limitations under the License.
+-- Copyright © 2025 SmartThings, Inc.
+-- Licensed under the Apache License, Version 2.0
 
 local test = require "integration_test"
 local capabilities = require "st.capabilities"
 local t_utils = require "integration_test.utils"
-local utils = require "st.utils"
-
 local clusters = require "st.matter.clusters"
 
 local mock_device = test.mock_device.build_test_matter_device({
@@ -48,6 +35,9 @@ local mock_device = test.mock_device.build_test_matter_device({
         { cluster_id = clusters.TemperatureMeasurement.ID,      cluster_type = "SERVER" },
         { cluster_id = clusters.RelativeHumidityMeasurement.ID, cluster_type = "SERVER" },
         { cluster_id = clusters.PowerSource.ID,                 cluster_type = "SERVER" },
+      },
+      device_types = {
+        { device_type_id = 0x0301, device_type_revision = 1 } -- Thermostat
       }
     }
   }
@@ -80,6 +70,9 @@ local function test_init()
       subscribe_request:merge(cluster:subscribe(mock_device))
     end
   end
+  test.socket.capability:__expect_send(
+    mock_device:generate_test_message("main", capabilities.thermostatOperatingState.supportedThermostatOperatingStates({"idle", "heating", "cooling"}, {visibility = {displayed = false}}))
+  )
   test.socket.matter:__expect_send({ mock_device.id, subscribe_request })
   test.mock_device.add_test_device(mock_device)
 end
@@ -103,6 +96,9 @@ test.register_message_test(
       message = mock_device:generate_test_message("main",
         capabilities.relativeHumidityMeasurement.humidity({ value = 40 }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -123,6 +119,9 @@ test.register_message_test(
       message = mock_device:generate_test_message("main",
         capabilities.temperatureMeasurement.temperature({ value = 40.0, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -143,6 +142,9 @@ test.register_message_test(
       message = mock_device:generate_test_message("main",
         capabilities.temperatureMeasurement.temperature({ value = 40.0, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -161,8 +163,17 @@ test.register_message_test(
       channel = "capability",
       direction = "send",
       message = mock_device:generate_test_message("main",
+        capabilities.thermostatHeatingSetpoint.heatingSetpointRange({ value = { minimum = 0.00, maximum = 100.00, step = 0.1 }, unit = "C" }))
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main",
         capabilities.thermostatHeatingSetpoint.heatingSetpoint({ value = 40.0, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -181,8 +192,17 @@ test.register_message_test(
       channel = "capability",
       direction = "send",
       message = mock_device:generate_test_message("main",
+        capabilities.thermostatCoolingSetpoint.coolingSetpointRange({ value = { minimum = 0.00, maximum = 100.00, step = 0.1 }, unit = "C" }))
+    },
+    {
+      channel = "capability",
+      direction = "send",
+      message = mock_device:generate_test_message("main",
         capabilities.thermostatCoolingSetpoint.coolingSetpoint({ value = 40.0, unit = "C" }))
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -203,6 +223,9 @@ test.register_message_test(
       message = mock_device:generate_test_message("main",
         capabilities.thermostatOperatingState.thermostatOperatingState.cooling())
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -223,6 +246,9 @@ test.register_message_test(
       message = mock_device:generate_test_message("main",
         capabilities.thermostatOperatingState.thermostatOperatingState.heating())
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -243,6 +269,9 @@ test.register_message_test(
       message = mock_device:generate_test_message("main",
         capabilities.thermostatOperatingState.thermostatOperatingState.fan_only())
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -263,6 +292,9 @@ test.register_message_test(
       message = mock_device:generate_test_message("main",
         capabilities.thermostatOperatingState.thermostatOperatingState.idle())
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -274,20 +306,30 @@ test.register_message_test(
       direction = "receive",
       message = {
         mock_device.id,
-        clusters.Thermostat.server.attributes.SystemMode:build_test_report_data(mock_device, 3, 5)
+        clusters.Thermostat.server.attributes.ControlSequenceOfOperation:build_test_report_data(mock_device, 1, 5)
       }
     },
     {
       channel = "capability",
       direction = "send",
-      message = mock_device:generate_test_message("main", capabilities.thermostatMode.thermostatMode.emergency_heat())
+      message = mock_device:generate_test_message("main", capabilities.thermostatMode.supportedThermostatModes({"off", "cool", "heat"}, {visibility={displayed=false}}))
+    },
+    {
+      channel = "matter",
+      direction = "receive",
+      message = {
+        mock_device.id,
+        clusters.Thermostat.server.attributes.SystemMode:build_test_report_data(mock_device, 3, 3)
+      }
     },
     {
       channel = "capability",
       direction = "send",
-      message = mock_device:generate_test_message("main",
-        capabilities.thermostatMode.supportedThermostatModes({ "emergency heat" }, {visibility={displayed=false}}))
+      message = mock_device:generate_test_message("main", capabilities.thermostatMode.thermostatMode.cool())
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -338,6 +380,9 @@ test.register_message_test(
       message = mock_device:generate_test_message("main",
         capabilities.thermostatMode.supportedThermostatModes({ "off",  "cool" }, {visibility={displayed=false}}))
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -369,14 +414,17 @@ test.register_message_test(
     {
       channel = "capability",
       direction = "send",
-      message = mock_device:generate_test_message("main", capabilities.thermostatMode.thermostatMode.emergency_heat())
+      message = mock_device:generate_test_message("main",
+        capabilities.thermostatMode.supportedThermostatModes({ "off", "cool", "heat", "emergency heat" }, {visibility={displayed=false}}))
     },
     {
       channel = "capability",
       direction = "send",
-      message = mock_device:generate_test_message("main",
-        capabilities.thermostatMode.supportedThermostatModes({ "off", "cool", "heat", "emergency heat" }, {visibility={displayed=false}}))
-    }
+      message = mock_device:generate_test_message("main", capabilities.thermostatMode.thermostatMode.emergency_heat())
+    },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -424,6 +472,9 @@ test.register_message_test(
       message = mock_device:generate_test_message("main", capabilities.thermostatFanMode.thermostatFanMode.on())
     },
 
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -459,6 +510,9 @@ test.register_message_test(
       message = mock_device:generate_test_message("main",
         capabilities.thermostatFanMode.supportedThermostatFanModes({ "auto", "on" }, {visibility={displayed=false}}))
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -481,6 +535,9 @@ test.register_message_test(
         clusters.Thermostat.attributes.OccupiedHeatingSetpoint:write(mock_device, 3, 15 * 100)
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -503,29 +560,9 @@ test.register_message_test(
         clusters.Thermostat.attributes.OccupiedCoolingSetpoint:write(mock_device, 3, 25 * 100)
       }
     }
-  }
-)
-
-test.register_message_test(
-  "Setting the heating setpoint to a Fahrenheit value should send the appropriate commands",
+  },
   {
-    {
-      channel = "capability",
-      direction = "receive",
-      message = {
-        mock_device.id,
-        { capability = "thermostatHeatingSetpoint", component = "main", command = "setHeatingSetpoint", args = { 64 } }
-      }
-    },
-    {
-      channel = "matter",
-      direction = "send",
-      message = {
-        mock_device.id,
-        clusters.Thermostat.attributes.OccupiedHeatingSetpoint:write(mock_device, 3,
-          utils.round((64 - 32) * (5 / 9.0) * 100))
-      }
-    }
+     min_api_version = 17
   }
 )
 
@@ -548,6 +585,9 @@ test.register_message_test(
         clusters.Thermostat.attributes.SystemMode:write(mock_device, 3, 3)
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -586,6 +626,9 @@ test.register_message_test(
         FanMode:write(mock_device, 3, FanMode.ON)
       }
     },
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -608,6 +651,9 @@ test.register_message_test(
         clusters.FanControl.attributes.FanMode:write(mock_device, 3, 5)
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 
@@ -626,7 +672,11 @@ test.register_coroutine_test("Battery percent reports should generate correct me
     )
   )
   test.wait_for_events()
-end)
+end,
+{
+   min_api_version = 17
+}
+)
 
 local refresh_request = nil
 local attribute_refresh_list = {
@@ -677,6 +727,9 @@ test.register_message_test(
         refresh_request
       }
     }
+  },
+  {
+     min_api_version = 17
   }
 )
 

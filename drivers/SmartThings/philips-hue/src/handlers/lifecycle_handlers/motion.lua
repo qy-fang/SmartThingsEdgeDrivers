@@ -1,10 +1,9 @@
+local capabilities = require "st.capabilities"
 local log = require "log"
 local st_utils = require "st.utils"
 -- trick to fix the VS Code Lua Language Server typechecking
 ---@type fun(val: any?, name: string?, multi_line: boolean?): string
 st_utils.stringify_table = st_utils.stringify_table
-
-local refresh_handler = require("handlers.commands").refresh_handler
 
 local Discovery = require "disco"
 local Fields = require "fields"
@@ -51,10 +50,11 @@ function MotionLifecycleHandlers.added(driver, device, parent_device_id, resourc
     })
     return
   end
+  local hue_id_to_device = utils.get_hue_id_to_device_table_by_bridge(driver, device) or {}
 
-  driver.hue_identifier_to_device_record[sensor_info.power_id] = device
-  driver.hue_identifier_to_device_record[sensor_info.temperature_id] = device
-  driver.hue_identifier_to_device_record[sensor_info.light_level_id] = device
+  hue_id_to_device[sensor_info.power_id] = device
+  hue_id_to_device[sensor_info.temperature_id] = device
+  hue_id_to_device[sensor_info.light_level_id] = device
 
   device:set_field(Fields.DEVICE_TYPE, HueDeviceTypes.MOTION, { persist = true })
   device:set_field(Fields.HUE_DEVICE_ID, sensor_info.hue_device_id, { persist = true })
@@ -63,7 +63,7 @@ function MotionLifecycleHandlers.added(driver, device, parent_device_id, resourc
   device:set_field(Fields._ADDED, true, { persist = true })
   device:set_field(Fields._REFRESH_AFTER_INIT, true, { persist = true })
 
-  driver.hue_identifier_to_device_record[device_sensor_resource_id] = device
+  hue_id_to_device[device_sensor_resource_id] = device
 end
 
 ---@param driver HueDriver
@@ -79,8 +79,9 @@ function MotionLifecycleHandlers.init(driver, device)
   log.debug("resource id " .. tostring(device_sensor_resource_id))
 
   local hue_device_id = device:get_field(Fields.HUE_DEVICE_ID)
-  if not driver.hue_identifier_to_device_record[device_sensor_resource_id] then
-    driver.hue_identifier_to_device_record[device_sensor_resource_id] = device
+  local hue_id_to_device = utils.get_hue_id_to_device_table_by_bridge(driver, device) or {}
+  if not hue_id_to_device[device_sensor_resource_id] then
+    hue_id_to_device[device_sensor_resource_id] = device
   end
   local sensor_info, err
   sensor_info = Discovery.device_state_disco_cache[device_sensor_resource_id]
@@ -125,7 +126,11 @@ function MotionLifecycleHandlers.init(driver, device)
   end
   device:set_field(Fields._INIT, true, { persist = false })
   if device:get_field(Fields._REFRESH_AFTER_INIT) then
-    refresh_handler(driver, device)
+    driver:inject_capability_command(device, {
+      capability = capabilities.refresh.ID,
+      command = capabilities.refresh.commands.refresh.NAME,
+      args = {}
+    })
     device:set_field(Fields._REFRESH_AFTER_INIT, false, { persist = true })
   end
 end

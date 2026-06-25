@@ -1,4 +1,15 @@
 zigbeeManufacturer:
+  # GELUBU
+  - id: "GELUBU/S93"
+    deviceLabel: GELUBU Door Lock S93
+    manufacturer: GELUBU
+    model: S93
+    deviceProfileName: lock-battery
+  - id: "GELUBU/G30"
+    deviceLabel: GELUBU Door Lock G30
+    manufacturer: GELUBU
+    model: G30
+    deviceProfileName: lock-battery
   # YALE
   - id: "Yale YRD220/240"
     deviceLabel: "Yale Door Lock"
@@ -180,6 +191,11 @@ zigbeeManufacturer:
     manufacturer: TOTEM
     model: S50V
     deviceProfileName: lock-battery
+  - id: TOTEM/S90
+    deviceLabel: TOTEM Door Lock
+    manufacturer: TOTEM
+    model: S90
+    deviceProfileName: lock-battery
   - id: TOTEM/S93
     deviceLabel: TOTEM Door Lock
     manufacturer: TOTEM
@@ -189,6 +205,12 @@ zigbeeManufacturer:
     deviceLabel: TOTEM Door Lock
     manufacturer: TOTEM
     model: W31V
+    deviceProfileName: lock-battery
+  # Greentown
+  - id: Greentown/SG20
+    deviceLabel: Greentown Lock(SG20)
+    manufacturer: Zhenchen
+    model: SG20
     deviceProfileName: lock-battery
 zigbeeGeneric:
   - id: "genericLock"
